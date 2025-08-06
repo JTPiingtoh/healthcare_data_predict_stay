@@ -107,11 +107,24 @@ if __name__ == "__main__":
     target = 'AHD'
     X = df.drop(target, axis=1)
     y = df[target]
+
+    y = 1*(y == 'Yes')
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=33)
-    encoded_x_test = knn_pipe.fit_transform(X_test)
+    encoded_x_train = knn_pipe.fit_transform(X_train)
 
     # issue is target index will change post transformation: kist use dataframes
 
-    print(get_class_average_eu_distance(encoded_x_test, target))
-    print(encoded_x_test)
+    # print(get_class_average_eu_distance(encoded_x_test, target))
+    # print(encoded_x_test)
 
+    from test_class import PRKNeighborsClassifier
+
+    prknn = PRKNeighborsClassifier(n_neighbors=5)
+    prknn.fit(encoded_x_train, y_train)
+
+    prknn._get_class_radii()
+
+    # print(y_train)
+    # print(prknn._class_radii)
+    print(prknn._get_proximal_ratios())
