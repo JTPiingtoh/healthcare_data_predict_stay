@@ -1,71 +1,80 @@
 import numpy as np
-from sklearn.base import BaseEstimator
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.utils.validation import validate_data, check_is_fitted
+from sklearn.utils.multiclass import unique_labels
 from sklearn.neighbors import KNeighborsClassifier
 from scipy.spatial.distance import euclidean
+from scipy.spatial.distance import pdist
 
 
-
-class PRKNeighborsClassifier(BaseEstimator):
+class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
+    '''
+    Extends sklearn's KNeighborsClassifier by implementing proximal ratio weights as proposed by 
+    https://journalofbigdata.springeropen.com/articles/10.1186/s40537-025-01137-2
+    '''
     def __init__(
             self,
             n_neighbors
             ):
         self.n_neighbors = n_neighbors
         self.knn_model = KNeighborsClassifier(n_neighbors=self.n_neighbors)
+        self.is_fitted_ = False
         super().__init__()
 
     # fit knn model
     def fit(self, X, y):
         '''
-            Calls sklearn's fit method as well as setting some convenience variables
+        Calls sklearn's fit method as well as setting some convenience variables
         '''
-        self.knn_model.fit(X,y)
-        self._X = X
-        self._y = y
-        self.classes_ = self.knn_model.classes_
         self.is_fitted_ = True
-        
+        X, y = validate_data(self, X, y)
+        self.X_ = X
+        self.y_ = y
+        self.knn_model.fit(X,y)
+        self.classes_ = unique_labels(y)
 
-    def _get_class_radii(self):
+        if self.classes_ != self.knn_model.classes_:
+            raise RuntimeError("Nested knn model has different classes to wrapper model.")
+
+        self._class_radii = self._get_class_radii()
+        self._proximal_ratios = self._get_proximal_ratios(X,y)
+
+        return self
+
+
+    def _get_class_radii(self, X, y):
         '''
         Get the class radii, stored in a dict.
-        '''
-        if self.is_fitted_ is None:
-            raise RuntimeError("KNN model has not been fit when getting class radii.")
-        target_classes = self.classes_
+        '''   
 
+        X, y = self.X_.values, self.y_.values
+        target_classes = self.classes_
         class_radii = {}
 
         for target_class in target_classes:
 
-            mean_distance = 0
-            n = 1
-
-            class_rows = self._X[self._y == target_class]
+            class_rows = X[y == target_class]
             rows = class_rows.shape[0]
+            pairwise_distances = pdist(class_rows, metric='euclidean')
+            class_radii[target_class] = np.mean(pairwise_distances)
 
-            for i in range(rows):
-                for j in range(i + 1, rows):
-                    distance_eu = euclidean(class_rows[i], class_rows[j])
-                    mean_distance = ( (mean_distance * n) + distance_eu ) / (n + 1)
-                    n+=1
-
-            class_radii[target_class] = mean_distance
-
-        self._class_radii = class_radii
+        return class_radii
+    
 
 
-    def _get_proximal_ratios(self):
+    def _get_proximal_ratios(self, X, y):
         
-        proximal_ratios = np.empty((self._X.shape[0], ), dtype='float64')
+        X, y = self.X_.values, self.y_.values
 
-        for id, x in enumerate(self._X):
-            radius = self._class_radii[self._y.values[id]]
+        proximal_ratios = np.empty((X.shape[0], ), dtype='float64')
+
+        for id, x in enumerate(X):
+            radius = self._class_radii[y[id]]
 
             distances, knn_indices = self.knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
 
-            target_class = self._y.values[id]
-            knn_classes = self._y.values[knn_indices.reshape(-1,)]
+            target_class = y[id]
+            knn_classes = y[knn_indices.reshape(-1,)]
 
             val = np.sum( 
                     1.0*(
@@ -75,16 +84,22 @@ class PRKNeighborsClassifier(BaseEstimator):
 
             c = np.sum(1.0*(distances < radius))
 
-            print(val, c)
+            # Handle 0. If c is 0, so is val, which would suggest that the point is an outlier within its own class, therefore has a proximal ratio of 0.
+            if c == 0:
+                proximal_ratios[id] = 0.0
 
-            proximal_ratios[id] = val / c
+            else:
+                proximal_ratios[id] = val / c
 
         return proximal_ratios
 
 
 
     def predict(self, X, y=None):
-        pass
+
+        check_is_fitted(self)
+        X = validate_data(self, X, reset=False)
+        
         # get x_test neighbors
         # self.knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
 

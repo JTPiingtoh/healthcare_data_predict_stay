@@ -123,8 +123,4 @@ if __name__ == "__main__":
     prknn = PRKNeighborsClassifier(n_neighbors=5)
     prknn.fit(encoded_x_train, y_train)
 
-    prknn._get_class_radii()
-
-    # print(y_train)
-    # print(prknn._class_radii)
-    print(prknn._get_proximal_ratios())
+    print(prknn._proximal_ratios)
