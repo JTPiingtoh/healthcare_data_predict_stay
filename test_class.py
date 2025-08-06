@@ -21,6 +21,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
         self.is_fitted_ = False
         super().__init__()
 
+
     # fit knn model
     def fit(self, X, y):
         '''
@@ -32,22 +33,18 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
         self.y_ = y
         self.knn_model.fit(X,y)
         self.classes_ = unique_labels(y)
-
-        if self.classes_ != self.knn_model.classes_:
-            raise RuntimeError("Nested knn model has different classes to wrapper model.")
-
         self._class_radii = self._get_class_radii()
-        self._proximal_ratios = self._get_proximal_ratios(X,y)
+        self._proximal_ratios = self._get_proximal_ratios()
 
         return self
 
 
-    def _get_class_radii(self, X, y):
+    def _get_class_radii(self):
         '''
         Get the class radii, stored in a dict.
         '''   
 
-        X, y = self.X_.values, self.y_.values
+        X, y = self.X_, self.y_
         target_classes = self.classes_
         class_radii = {}
 
@@ -61,10 +58,10 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
         return class_radii
     
 
-
-    def _get_proximal_ratios(self, X, y):
+    def _get_proximal_ratios(self):
         
-        X, y = self.X_.values, self.y_.values
+        X, y = self.X_, self.y_
+
 
         proximal_ratios = np.empty((X.shape[0], ), dtype='float64')
 
@@ -91,16 +88,22 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
             else:
                 proximal_ratios[id] = val / c
 
-        return proximal_ratios
-
+        return np.array(proximal_ratios)
 
 
     def predict(self, X, y=None):
 
         check_is_fitted(self)
         X = validate_data(self, X, reset=False)
-        
-        # get x_test neighbors
-        # self.knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
 
-        # 
+        distances, indexes = self.knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
+        scores = distances / self._proximal_ratios[indexes]
+        
+        y_pred = np.empty((X.shape), dtype=X.dtype)
+
+        for i, observation in enumerate(distances):
+            # get classes
+            classes = self.y_[indexes[i]]
+            
+            for clss in np.unique(classes):
+                clss_indexes = classes == clss

@@ -112,6 +112,7 @@ if __name__ == "__main__":
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=33)
     encoded_x_train = knn_pipe.fit_transform(X_train)
+    encoded_x_test = knn_pipe.fit_transform(X_test)
 
     # issue is target index will change post transformation: kist use dataframes
 
@@ -124,3 +125,5 @@ if __name__ == "__main__":
     prknn.fit(encoded_x_train, y_train)
 
     print(prknn._proximal_ratios)
+    print(prknn.classes_)
+    prknn.predict(encoded_x_test)
