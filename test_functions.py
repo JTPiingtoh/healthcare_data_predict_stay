@@ -120,10 +120,17 @@ if __name__ == "__main__":
     # print(encoded_x_test)
 
     from test_class import PRKNeighborsClassifier
+    from test_class2 import PRKNeighborsClassifier2
+    from sklearn.utils.estimator_checks import check_estimator
 
     prknn = PRKNeighborsClassifier(n_neighbors=5)
     prknn.fit(encoded_x_train, y_train)
 
-    print(prknn._proximal_ratios)
-    print(prknn.classes_)
-    prknn.predict(encoded_x_test)
+    # print(prknn._proximal_ratios)
+    # print(prknn.classes_)
+    # y_pred = prknn.predict(encoded_x_test)
+    # print(prknn.__getattribute__('_fit_X'))
+    # print(y_pred)
+    # print(encoded_x_test.shape)
+
+    check_estimator(prknn)

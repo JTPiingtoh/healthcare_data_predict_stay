@@ -1,5 +1,6 @@
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.neighbors._base import NeighborsBase
 from sklearn.utils.validation import validate_data, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 from sklearn.neighbors import KNeighborsClassifier
@@ -7,31 +8,60 @@ from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import pdist
 
 
-class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
+class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
     '''
     Extends sklearn's KNeighborsClassifier by implementing proximal ratio weights as proposed by 
     https://journalofbigdata.springeropen.com/articles/10.1186/s40537-025-01137-2
     '''
     def __init__(
-            self,
-            n_neighbors
-            ):
-        self.n_neighbors = n_neighbors
-        self.knn_model = KNeighborsClassifier(n_neighbors=self.n_neighbors)
-        self.is_fitted_ = False
-        super().__init__()
+        self,
+        n_neighbors=5,
+        *,
+        weights="uniform",
+        algorithm="auto",
+        leaf_size=30,
+        p=2,
+        metric="minkowski",
+        metric_params=None,
+        n_jobs=None,
+    ):
+        super().__init__(
+            n_neighbors=n_neighbors,
+            algorithm=algorithm,
+            leaf_size=leaf_size,
+            metric=metric,
+            p=p,
+            metric_params=metric_params,
+            n_jobs=n_jobs,
+        )
+        self.weights = weights
 
-
+    def __sklearn_tags__(self):
+        tags = super().__sklearn_tags__()
+        tags.input_tags.sparse=False
+        return tags
+    
     # fit knn model
     def fit(self, X, y):
         '''
         Calls sklearn's fit method as well as setting some convenience variables
         '''
+        
+        self._knn_model = KNeighborsClassifier(
+            n_neighbors=self.n_neighbors,
+            
+            algorithm = self.algorithm,
+            leaf_size = self.leaf_size,
+            metric = self.metric,
+            metric_params = self.metric_params,
+            p = self.p,
+            n_jobs = self.n_jobs
+        ) 
+        self._knn_model.fit(X,y)
         self.is_fitted_ = True
         X, y = validate_data(self, X, y)
         self.X_ = X
         self.y_ = y
-        self.knn_model.fit(X,y)
         self.classes_ = unique_labels(y)
         self._class_radii = self._get_class_radii()
         self._proximal_ratios = self._get_proximal_ratios()
@@ -68,7 +98,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
         for id, x in enumerate(X):
             radius = self._class_radii[y[id]]
 
-            distances, knn_indices = self.knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
+            distances, knn_indices = self._knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
 
             target_class = y[id]
             knn_classes = y[knn_indices.reshape(-1,)]
@@ -96,14 +126,29 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
         check_is_fitted(self)
         X = validate_data(self, X, reset=False)
 
-        distances, indexes = self.knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
+        distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
         scores = distances / self._proximal_ratios[indexes]
         
-        y_pred = np.empty((X.shape), dtype=X.dtype)
+        y_pred = np.empty((X.shape[0],), dtype=X.dtype)
 
-        for i, observation in enumerate(distances):
+        # TODO: implement in cpp
+        # assign label of class with max weight
+        for id, d in enumerate(scores):
             # get classes
-            classes = self.y_[indexes[i]]
             
-            for clss in np.unique(classes):
-                clss_indexes = classes == clss
+            id: int = id
+
+            classes = self.y_[indexes[id]]
+            # print(classes)
+            # for each class c present in d, find weight of class
+            unique_classes = np.unique(classes)
+            average_weights = np.zeros(unique_classes.shape)
+            
+            for j, clss in enumerate(unique_classes):
+                average_weights[j] = np.mean(d[classes == clss])
+            print(y_pred)
+            
+            y_pred[id] = unique_classes[np.argmax(average_weights)]
+
+        return y_pred
+            
