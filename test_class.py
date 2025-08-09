@@ -1,7 +1,8 @@
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.neighbors._base import NeighborsBase
-from sklearn.utils.validation import validate_data, check_is_fitted
+from sklearn.utils.validation import validate_data, check_is_fitted, check_array, _num_samples, check_X_y
+from sklearn.utils.multiclass import check_classification_targets
 from sklearn.utils.multiclass import unique_labels
 from sklearn.neighbors import KNeighborsClassifier
 from scipy.spatial.distance import euclidean
@@ -34,22 +35,39 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             metric_params=metric_params,
             n_jobs=n_jobs,
         )
-        self.weights = weights
 
+
+    # These need to be set to bypass certain checks 
     def __sklearn_tags__(self):
         tags = super().__sklearn_tags__()
         tags.input_tags.sparse=False
+        tags.target_tags.multi_output=False
+
+        # poor_score is defined as anything below 0.83. However, seems like a harsh metric when using for higher ordinality targets.
+        tags.classifier_tags.poor_score=True
         return tags
     
-    # fit knn model
+    # fit knn model and calculate proximal ratio
     def fit(self, X, y):
         '''
         Calls sklearn's fit method as well as setting some convenience variables
         '''
+        # Multi output not allowed
+        X, y = validate_data(
+                    self,
+                    X,
+                    y,
+                    accept_sparse=False,
+                    multi_output=False,
+                )
+        
+        check_classification_targets(y) 
+        self.classes_ = unique_labels(y)
+        self.X_ = X
+        self.y_ = y
         
         self._knn_model = KNeighborsClassifier(
             n_neighbors=self.n_neighbors,
-            
             algorithm = self.algorithm,
             leaf_size = self.leaf_size,
             metric = self.metric,
@@ -57,14 +75,12 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             p = self.p,
             n_jobs = self.n_jobs
         ) 
+        
+        # fit internal knn model
         self._knn_model.fit(X,y)
-        self.is_fitted_ = True
-        X, y = validate_data(self, X, y)
-        self.X_ = X
-        self.y_ = y
-        self.classes_ = unique_labels(y)
         self._class_radii = self._get_class_radii()
         self._proximal_ratios = self._get_proximal_ratios()
+        self.is_fitted_ = True
 
         return self
 
@@ -81,7 +97,6 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         for target_class in target_classes:
 
             class_rows = X[y == target_class]
-            rows = class_rows.shape[0]
             pairwise_distances = pdist(class_rows, metric='euclidean')
             class_radii[target_class] = np.mean(pairwise_distances)
 
@@ -92,10 +107,10 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         
         X, y = self.X_, self.y_
 
-
         proximal_ratios = np.empty((X.shape[0], ), dtype='float64')
 
         for id, x in enumerate(X):
+            # _class_radii is a dict
             radius = self._class_radii[y[id]]
 
             distances, knn_indices = self._knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
@@ -111,6 +126,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
 
             c = np.sum(1.0*(distances < radius))
 
+            print(distances, radius)
             # Handle 0. If c is 0, so is val, which would suggest that the point is an outlier within its own class, therefore has a proximal ratio of 0.
             if c == 0:
                 proximal_ratios[id] = 0.0
@@ -124,12 +140,15 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
     def predict(self, X, y=None):
 
         check_is_fitted(self)
+        
         X = validate_data(self, X, reset=False)
+        n_outputs = len([self.classes_])
+        n_queries = _num_samples(self._fit_X if X is None else X)
 
         distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
         scores = distances / self._proximal_ratios[indexes]
         
-        y_pred = np.empty((X.shape[0],), dtype=X.dtype)
+        y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
 
         # TODO: implement in cpp
         # assign label of class with max weight
@@ -146,9 +165,10 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             
             for j, clss in enumerate(unique_classes):
                 average_weights[j] = np.mean(d[classes == clss])
-            print(y_pred)
+            # print(y_pred)
             
             y_pred[id] = unique_classes[np.argmax(average_weights)]
 
+        #TODO: change this to skl's standard implementation?
         return y_pred
             
