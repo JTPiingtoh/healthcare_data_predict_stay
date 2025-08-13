@@ -111,11 +111,12 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
 
         for id, x in enumerate(X):
             # _class_radii is a dict
-            radius = self._class_radii[y[id]]
+            target_class = y[id]
+            radius = self._class_radii[target_class]
 
             distances, knn_indices = self._knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
 
-            target_class = y[id]
+            
             knn_classes = y[knn_indices.reshape(-1,)]
 
             val = np.sum( 
@@ -126,7 +127,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
 
             c = np.sum(1.0*(distances < radius))
 
-            print(distances, radius)
+            # print(distances, radius)
             # Handle 0. If c is 0, so is val, which would suggest that the point is an outlier within its own class, therefore has a proximal ratio of 0.
             if c == 0:
                 proximal_ratios[id] = 0.0
@@ -146,26 +147,31 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         n_queries = _num_samples(self._fit_X if X is None else X)
 
         distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
-        scores = distances / self._proximal_ratios[indexes]
+        # print(distances)
+        ww = self._proximal_ratios[indexes] / distances
         
+        print(ww)
         y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
 
         # TODO: implement in cpp
         # assign label of class with max weight
-        for id, d in enumerate(scores):
+        for id, weights in enumerate(ww):
             # get classes
             
             id: int = id
 
+        
             classes = self.y_[indexes[id]]
-            # print(classes)
             # for each class c present in d, find weight of class
             unique_classes = np.unique(classes)
             average_weights = np.zeros(unique_classes.shape)
             
             for j, clss in enumerate(unique_classes):
-                average_weights[j] = np.mean(d[classes == clss])
+                # This will cause problems with targets with more than 2 possible classes: any class with even 1 inf score will lead to an inf average, leading to multiple classes with an inf weight
+                average_weights[j] = np.mean(weights[classes == clss])
             # print(y_pred)
+            
+            print(average_weights)
             
             y_pred[id] = unique_classes[np.argmax(average_weights)]
 

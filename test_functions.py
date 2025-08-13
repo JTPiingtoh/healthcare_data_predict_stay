@@ -77,5 +77,5 @@ knn_pipe_classifier.fit(X_train,y_train)
 y_pred = knn_pipe_classifier.predict(X_test)
 score = knn_pipe_classifier.score(X_test, y_test)
 
-# print(knn_pipe_classifier['classifier']._proximal_ratios)
+print(score)
 
