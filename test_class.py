@@ -44,7 +44,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         tags.target_tags.multi_output=False
 
         # poor_score is defined as anything below 0.83. However, seems like a harsh metric when using for higher ordinality targets.
-        tags.classifier_tags.poor_score=True
+        #TODO tags.classifier_tags.poor_score=True
         return tags
     
     # fit knn model and calculate proximal ratio
@@ -147,10 +147,10 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         n_queries = _num_samples(self._fit_X if X is None else X)
 
         distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
-        # print(distances)
+        print(distances, indexes)
         ww = self._proximal_ratios[indexes] / distances
         
-        print(ww)
+        # print(ww)
         y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
 
         # TODO: implement in cpp
@@ -162,18 +162,17 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
 
         
             classes = self.y_[indexes[id]]
-            # for each class c present in d, find weight of class
-            unique_classes = np.unique(classes)
-            average_weights = np.zeros(unique_classes.shape)
+            average_weights = np.zeros(classes.shape)
             
-            for j, clss in enumerate(unique_classes):
-                # This will cause problems with targets with more than 2 possible classes: any class with even 1 inf score will lead to an inf average, leading to multiple classes with an inf weight
+            for j, clss in enumerate(classes):
+                # This will cause problems with targets with more than 2 possible 
+		# classes: any class with even 1 inf score will lead to an inf average,
+		# leading to multiple classes with an inf weight
                 average_weights[j] = np.mean(weights[classes == clss])
             # print(y_pred)
             
-            print(average_weights)
-            
-            y_pred[id] = unique_classes[np.argmax(average_weights)]
+            # print(average_weights, classes, classes[np.argmax(average_weights)]) 
+            y_pred[id] = classes[np.argmax(average_weights)]
 
         #TODO: change this to skl's standard implementation?
         return y_pred

@@ -2,9 +2,9 @@ import numpy as np
 from sklearn.utils.extmath import weighted_mode
 
 _y = np.array([1,0,1,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1,1,1,0,0,1,0,1,0,1,0,1,0]).reshape((-1, 1))
-classes = [0,1]
-cls =  np.array([0,1,0,1,1]).reshape(1,-1)
-dist = np.array([1,0,0,3,5], dtype=np.float64).reshape(1,-1)
+classes = [0,1,2]
+cls =  np.array([0,0,1,2,1,2]).reshape(1,-1)
+dist = np.array([1,0,0,0,5,0], dtype=np.float64).reshape(1,-1)
 
 with np.errstate(divide='ignore'):
     dist = 1 / dist
@@ -17,10 +17,7 @@ dist[inf_row] = inf_mask[inf_row]
 
 weights = dist
 
-print(_y[3,0])
+if weights is not None:
+	mode, _ = weighted_mode(cls, weights, axis=1)
 
-for k, classes_k in enumerate(classes):
-    print(k)
-    if weights is not None:
-        mode, _ = weighted_mode(cls, weights, axis=1)
-    # print(mode)
+print(mode)

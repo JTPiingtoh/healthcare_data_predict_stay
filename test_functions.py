@@ -16,6 +16,8 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer # only using for test purposes
 
 
+check_estimator(PRKNeighborsClassifier())
+
 df = pd.read_csv('Heart.csv')
 ordinal_columns = [
     'RestECG',
@@ -59,7 +61,7 @@ knn_pipe_list_classifier = [
     ('encoder', encoder),
     ('scaler', MinMaxScaler()),
     ('imputer', SimpleImputer()),
-    ('classifier', PRKNeighborsClassifier(n_neighbors=5))
+    ('classifier', PRKNeighborsClassifier(n_neighbors=6))
 ]
 
 knn_pipe = Pipeline(knn_pipe_list)
@@ -75,7 +77,7 @@ X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_
 knn_pipe_classifier.fit(X_train,y_train)
 
 y_pred = knn_pipe_classifier.predict(X_test)
-score = knn_pipe_classifier.score(X_test, y_test)
+# score = knn_pipe_classifier.score(X_test, y_test)
 
-print(score)
-
+#print(score)
+#print(knn_pipe_classifier["classifier"]._proximal_ratios)
