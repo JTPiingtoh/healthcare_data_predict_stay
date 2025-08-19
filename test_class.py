@@ -170,7 +170,8 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             elif version == "enhanced":
                 ww = self._proximal_ratios[indexes] 
             elif version == "weighted":
-                
+                # TODO
+                pass
 
         # print(ww)
         y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
