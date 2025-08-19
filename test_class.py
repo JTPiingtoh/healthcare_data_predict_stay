@@ -16,6 +16,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
     '''
     def __init__(
         self,
+
         n_neighbors=5,
         *,
         weights="uniform",
@@ -25,6 +26,8 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         metric="minkowski",
         metric_params=None,
         n_jobs=None,
+
+        prversion="standard" 
     ):
         super().__init__(
             n_neighbors=n_neighbors,
@@ -35,6 +38,8 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             metric_params=metric_params,
             n_jobs=n_jobs,
         )
+        self.weights=weights
+        self.prversion = prversion
 
 
     # These need to be set to bypass certain checks 
@@ -44,7 +49,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         tags.target_tags.multi_output=False
 
         # poor_score is defined as anything below 0.83. However, seems like a harsh metric when using for higher ordinality targets.
-        #TODO tags.classifier_tags.poor_score=True
+        tags.classifier_tags.poor_score=False
         return tags
     
     # fit knn model and calculate proximal ratio
@@ -52,6 +57,10 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         '''
         Calls sklearn's fit method as well as setting some convenience variables
         '''
+
+        if self.prversion not in ["standard", "enhanced", "weighted"]:
+            raise ValueError("prversion not recognised; must be either 'standard', 'enhanced' or 'weighted'")
+
         # Multi output not allowed
         X, y = validate_data(
                     self,
@@ -128,7 +137,8 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             c = np.sum(1.0*(distances < radius))
 
             # print(distances, radius)
-            # Handle 0. If c is 0, so is val, which would suggest that the point is an outlier within its own class, therefore has a proximal ratio of 0.
+            # Handle 0. If c is 0, so is val, which would suggest that the point is an outlier within its own class, 
+            # therefore has a proximal ratio of 0.
             if c == 0:
                 proximal_ratios[id] = 0.0
 
@@ -147,9 +157,21 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         n_queries = _num_samples(self._fit_X if X is None else X)
 
         distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
-        print(distances, indexes)
-        ww = self._proximal_ratios[indexes] / distances
-        
+        # print(distances, indexes)
+
+        version = self.prversion
+
+        # Divide by zero warning removed, as inf value is valid of weighted mode calculation
+        with np.errstate(
+            divide="ignore"
+        ):
+            if version == "standard":
+                ww = self._proximal_ratios[indexes] / distances
+            elif version == "enhanced":
+                ww = self._proximal_ratios[indexes] 
+            elif version == "weighted":
+                
+
         # print(ww)
         y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
 
@@ -159,20 +181,30 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             # get classes
             
             id: int = id
-
         
+            # the classes of each nieghbor
             classes = self.y_[indexes[id]]
-            average_weights = np.zeros(classes.shape)
+
+            # the unique classes 
+            fitted_classes = self.classes_
+
+            average_weights = np.zeros(fitted_classes.shape, dtype="float64")
             
-            for j, clss in enumerate(classes):
+            for j, clss in enumerate(fitted_classes):
                 # This will cause problems with targets with more than 2 possible 
-		# classes: any class with even 1 inf score will lead to an inf average,
-		# leading to multiple classes with an inf weight
-                average_weights[j] = np.mean(weights[classes == clss])
-            # print(y_pred)
+		        # classes: any class with even 1 inf score will lead to an inf average,
+		        # leading to multiple classes with an inf weight
+
+                # TODO: If no neighbours are clss, average_weights[j] will == nan. 
+                # Add check, and if class is not present, set weight to 0.
+                if not np.any([classes == clss]):
+                    average_weights[j] = 0
+                else:
+                    average_weights[j] = np.mean(weights[classes == clss])
             
-            # print(average_weights, classes, classes[np.argmax(average_weights)]) 
-            y_pred[id] = classes[np.argmax(average_weights)]
+            # print(average_weights, classes, fitted_classes[np.argmax(average_weights)]) 
+            
+            y_pred[id] = fitted_classes[np.argmax(average_weights)]
 
         #TODO: change this to skl's standard implementation?
         return y_pred

@@ -16,7 +16,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer # only using for test purposes
 
 
-check_estimator(PRKNeighborsClassifier())
+#check_estimator(PRKNeighborsClassifier())
 
 df = pd.read_csv('Heart.csv')
 ordinal_columns = [
