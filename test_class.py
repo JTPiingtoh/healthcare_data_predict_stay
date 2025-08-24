@@ -1,3 +1,6 @@
+# TODO: fix tuple issue with member vars when initing internal knn model, then continue to split prknn and predict knn.
+
+
 import numpy as np
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.neighbors._base import NeighborsBase
