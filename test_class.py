@@ -9,10 +9,12 @@ from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import pdist
 
 
-class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
+class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator):
     '''
     Extends sklearn's KNeighborsClassifier by implementing proximal ratio weights as proposed by 
     https://journalofbigdata.springeropen.com/articles/10.1186/s40537-025-01137-2
+
+    Note: weights can only be supplied when not using the "weighted" prKNN, which uses proximal ratios as weights.
     '''
     def __init__(
         self,
@@ -20,26 +22,39 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
 
         *,
         weights="uniform",
-        algorithm="auto",
+        algorithm='auto',
         leaf_size=30,
         p=2,
         metric="minkowski",
         metric_params=None,
         n_jobs=None,
 
+        prediction_model_weights="uniform",
         prversion="standard" 
     ):
-        super().__init__(
-            n_neighbors=n_neighbors,
-            algorithm=algorithm,
-            leaf_size=leaf_size,
-            metric=metric,
-            p=p,
-            metric_params=metric_params,
-            n_jobs=n_jobs,
-        )
-        self.weights=weights
+        # These are for methods such as kneighbors 
+        # super().__init__(
+        #     n_neighbors=n_neighbors,
+        #     algorithm=algorithm,
+        #     leaf_size=leaf_size,
+        #     metric=metric,
+        #     p=p,
+        #     metric_params=metric_params,
+        #     n_jobs=n_jobs,
+        # )
+
+        # TODO: Need to seperate pr model and prediction model's kwargs somehow.
+        self.n_neighbors=n_neighbors,
+        self.algorithm=algorithm,
+        self.leaf_size=leaf_size,
+        self.weights = weights,
+        self.metric=metric,
+        self.p=p,
+        self.metric_params=metric_params,
+        self.n_jobs=n_jobs,
+
         self.prversion = prversion
+        self.prediction_model_weights = prediction_model_weights
 
 
     # These need to be set to bypass certain checks 
@@ -55,7 +70,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
     # fit knn model and calculate proximal ratio
     def fit(self, X, y):
         '''
-        Calls sklearn's fit method as well as setting some convenience variables
+        Computes the training set's proximal ratios, and fits the prediction model ready for prediciton.
         '''
 
         if self.prversion not in ["standard", "enhanced", "weighted"]:
@@ -75,21 +90,29 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         self.X_ = X
         self.y_ = y
         
-        self._knn_model = KNeighborsClassifier(
+        # TODO: for some reason, member vars are being stored as tuples
+        self.pr_knn_model = KNeighborsClassifier(
             n_neighbors=self.n_neighbors,
             algorithm = self.algorithm,
             leaf_size = self.leaf_size,
             metric = self.metric,
             metric_params = self.metric_params,
             p = self.p,
-            n_jobs = self.n_jobs
-        ) 
+            n_jobs = self.n_jobs,
+            weights=self.weights
+        )
         
         # fit internal knn model
-        self._knn_model.fit(X,y)
+        self.pr_knn_model.fit(X,y)
         self._class_radii = self._get_class_radii()
         self._proximal_ratios = self._get_proximal_ratios()
         self.is_fitted_ = True
+        if self.prversion == "weighted":
+            prediction_model_weights = self._return_proximal_ratios
+        else: 
+            prediction_model_weights = self.prediction_model_weights 
+
+        self.prediction_knn_model = KNeighborsClassifier(n_neighbors=self.n_neighbors, weights=prediction_model_weights).fit(X,y)
 
         return self
 
@@ -123,7 +146,7 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             target_class = y[id]
             radius = self._class_radii[target_class]
 
-            distances, knn_indices = self._knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
+            distances, knn_indices = self.pr_knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.n_neighbors)
 
             
             knn_classes = y[knn_indices.reshape(-1,)]
@@ -158,7 +181,12 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         version = self.prversion
         X = validate_data(self, X, reset=False)
         weights = self._return_proximal_ratios if version == "weighted" else "uniform"
-        distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors, weights=weights)
+
+        # TODO: add weighted model if weighted pr knn being used
+        if self.prversion == "weighted":
+            distances, indexes = self.prediction_knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
+        else:
+            distances, indexes = self.pr_knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
         # print(distances, indexes)
 
         # Divide by zero warning removed, as inf value is valid of weighted mode calculation
