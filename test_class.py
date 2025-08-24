@@ -16,8 +16,8 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
     '''
     def __init__(
         self,
-
         n_neighbors=5,
+
         *,
         weights="uniform",
         algorithm="auto",
@@ -177,35 +177,46 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
 
         # TODO: implement in cpp
         # assign label of class with max weight
-        for query_id, query_weights in enumerate(ww):
+        for query_index, query_weights in enumerate(ww):
      
             # the classes of each nieghbor
-            query_classes = self.y_[indexes[query_id]]
+            query_classes = self.y_[indexes[query_index]]
 
             # the unique classes 
             fitted_classes = self.classes_
 
             class_weights = np.zeros(fitted_classes.shape, dtype="float64")
 
-            for j, clss in enumerate(fitted_classes):
+            for j, clss in enumerate(fitted_classes): 
 
-                # TODO: implement weighted prKNN quary weights here
-                if self.prversion == "weighted":
-
-                    query_distances = query_weights
-                    weight_1 = 1 / query_distances
-                    weight_2 = 
-
-                
                 # A if class is not present, set weight to 0.
                 if not np.any([query_classes == clss]):
                     class_weights[j] = 0
+                # TODO: implement weighted prKNN quary weights here
+                elif self.prversion == "weighted":
+                    # if using weighted prknn, weights at this point are just distances
+                    class_distances = query_weights[query_classes == clss]
+                    weight_1 = np.sum(1 / class_distances)
+                    weight_2 = np.sum([query_classes == clss] * 1) / self.n_neighbors 
+
+                    dist_xk = np.max(class_distances)
+                    dist_x1 = np.min(class_distances)
+                    if dist_xk == dist_x1:
+                        # each point has weight 1
+                        weight_3 = np.sum([query_classes == clss] * 1)
+                    else:
+                        weight_3 = np.sum(
+                            ( (dist_xk - dist_x1) / (dist_xk - class_distances) ) * ( (dist_xk + dist_x1) / (dist_xk + class_distances) )
+                        )
+
+                    class_weights[j] = weight_1 + weight_2 + weight_3
+                    
                 else:
                     class_weights[j] = np.mean(query_weights[query_classes == clss])
             
             # print(class_weights, classes, fitted_classes[np.argmax(class_weights)]) 
             
-            y_pred[query_id] = fitted_classes[np.argmax(class_weights)]
+            y_pred[query_index] = fitted_classes[np.argmax(class_weights)]
 
         #TODO: change this to skl's standard implementation?
         return y_pred
