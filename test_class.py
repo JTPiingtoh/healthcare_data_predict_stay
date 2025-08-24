@@ -148,18 +148,18 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
         return np.array(proximal_ratios)
 
 
+    def _return_proximal_ratios(self, X): 
+        return self._proximal_ratios
+
+
     def predict(self, X, y=None):
 
         check_is_fitted(self)
-        
-        X = validate_data(self, X, reset=False)
-        n_outputs = len([self.classes_])
-        n_queries = _num_samples(self._fit_X if X is None else X)
-
-        distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors)
-        # print(distances, indexes)
-
         version = self.prversion
+        X = validate_data(self, X, reset=False)
+        weights = self._return_proximal_ratios if version == "weighted" else "uniform"
+        distances, indexes = self._knn_model.kneighbors(X, n_neighbors=self.n_neighbors, weights=weights)
+        # print(distances, indexes)
 
         # Divide by zero warning removed, as inf value is valid of weighted mode calculation
         with np.errstate(
@@ -170,42 +170,42 @@ class PRKNeighborsClassifier(ClassifierMixin, NeighborsBase, BaseEstimator):
             elif version == "enhanced":
                 ww = self._proximal_ratios[indexes] 
             elif version == "weighted":
-                # TODO
-                pass
+                ww = distances
 
         # print(ww)
         y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
 
         # TODO: implement in cpp
         # assign label of class with max weight
-        for id, weights in enumerate(ww):
-            # get classes
-            
-            id: int = id
-        
+        for query_id, query_weights in enumerate(ww):
+     
             # the classes of each nieghbor
-            classes = self.y_[indexes[id]]
+            query_classes = self.y_[indexes[query_id]]
 
             # the unique classes 
             fitted_classes = self.classes_
 
-            average_weights = np.zeros(fitted_classes.shape, dtype="float64")
-            
-            for j, clss in enumerate(fitted_classes):
-                # This will cause problems with targets with more than 2 possible 
-		        # classes: any class with even 1 inf score will lead to an inf average,
-		        # leading to multiple classes with an inf weight
+            class_weights = np.zeros(fitted_classes.shape, dtype="float64")
 
-                # TODO: If no neighbours are clss, average_weights[j] will == nan. 
-                # Add check, and if class is not present, set weight to 0.
-                if not np.any([classes == clss]):
-                    average_weights[j] = 0
+            for j, clss in enumerate(fitted_classes):
+
+                # TODO: implement weighted prKNN quary weights here
+                if self.prversion == "weighted":
+
+                    query_distances = query_weights
+                    weight_1 = 1 / query_distances
+                    weight_2 = 
+
+                
+                # A if class is not present, set weight to 0.
+                if not np.any([query_classes == clss]):
+                    class_weights[j] = 0
                 else:
-                    average_weights[j] = np.mean(weights[classes == clss])
+                    class_weights[j] = np.mean(query_weights[query_classes == clss])
             
-            # print(average_weights, classes, fitted_classes[np.argmax(average_weights)]) 
+            # print(class_weights, classes, fitted_classes[np.argmax(class_weights)]) 
             
-            y_pred[id] = fitted_classes[np.argmax(average_weights)]
+            y_pred[query_id] = fitted_classes[np.argmax(class_weights)]
 
         #TODO: change this to skl's standard implementation?
         return y_pred
