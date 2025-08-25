@@ -57,11 +57,17 @@ knn_pipe_list = [
     # ('classifier', KNeighborsClassifier(n_neighbors=5))
 ]
 
+prknn = PRKNeighborsClassifier(
+    pr_version="standard",
+    pr_knn_n_nieghbors
+)
+
+
 knn_pipe_list_classifier = [
     ('encoder', encoder),
     ('scaler', MinMaxScaler()),
     ('imputer', SimpleImputer()),
-    ('classifier', PRKNeighborsClassifier(n_neighbors=6))
+    ('classifier', prknn)
 ]
 
 knn_pipe = Pipeline(knn_pipe_list)
