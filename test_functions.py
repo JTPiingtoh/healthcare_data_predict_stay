@@ -58,8 +58,8 @@ knn_pipe_list = [
 ]
 
 prknn = PRKNeighborsClassifier(
-    pr_version="standard",
-    pr_knn_n_nieghbors
+    pr_version="weighted",
+    pr_eq_predict=False
 )
 
 

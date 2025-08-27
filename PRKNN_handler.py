@@ -9,11 +9,18 @@ class PRKNN_kwarg_handler():
 
     def __init__(
         self,
-        pr_version:str = "standard",
-        pr_eq_predict: bool = True,
-        
-        **kwargs
+        pr_version: str | None = "standard", 
+        base_knn_params: dict | None = None,
+        pr_knn_params: dict | None = None,
+        predict_knn_params: dict | None = None
     ):
+
+        self.base_knn_params = base_knn_params
+        self.pr_knn_params = pr_knn_params
+        self.predict_knn_params = predict_knn_params
+        
+        if base_knn_params and (pr_knn_params or predict_knn_params):
+            raise ValueError(f"pr and predict knn parameters can not be set alongside base parameters")
 
         self._knn_kwargs_list = [
             "n_neighbors",
@@ -25,10 +32,6 @@ class PRKNN_kwarg_handler():
             "metric_params",
             "n_jobs",
         ]
-
-        self._pr_version = pr_version
-        self._pr_eq_predict = pr_eq_predict
-
 
         defaults_base = dict(
                 n_neighbors=5,
@@ -44,29 +47,30 @@ class PRKNN_kwarg_handler():
         defaults = {}
         valid_knn_kwargs = []
 
-        for default, value in defaults_base.items():
+        for key, value in defaults_base.items():
 
-            if pr_eq_predict == True:
-                defaults[default] = value
-                valid_knn_kwargs.append(default)
+            if self.pr_eq_predict:
 
+                defaults[key] = value
+                valid_knn_kwargs.append(key)
+      
             else:
-                defaults["pr_" + default] = value
-                defaults["predict_" + default] = value
+                
+                defaults["pr_" + key] = value
+                defaults["predict_" + key] = value
 
-                valid_knn_kwargs.append("pr_" + default)
-                valid_knn_kwargs.append("predict_" + default)
+                valid_knn_kwargs.append("pr_" + key)
+                valid_knn_kwargs.append("predict_" + key)
 
+            
         merged = {**defaults,**kwargs}
 
-        # for argument in self._knn_kwargs_list``:
-        #     print(merged[argument])
 
         for k in kwargs:
 
             if k not in defaults:
                 
-                if pr_eq_predict and (k.startswith("pr_") or k.startswith("predict_")): 
+                if self.pr_eq_predict and (k.startswith("pr_" or k.startswith("predict_"))): 
                     raise ValueError(f"Recieved argument '{k}': pr_ or predict_ prefix cannot be used for arguments when pr_eq_predict=True")
 
                 elif k in defaults_base:
@@ -75,10 +79,13 @@ class PRKNN_kwarg_handler():
                 else:
                     raise ValueError(f"Recieved unexptected argument: {k}")
         
-        if not pr_eq_predict:
-            for key, val in merged.items():
-                setattr(self, key, val)
-        else:            
+        
+        if self.pr_eq_predict:
+                for key, val in merged.items():
+                    setattr(self, "pr_" + key, val)
+                    setattr(self, "predict_" + key, val)
+        
+        else:
             pairs = float(len(valid_knn_kwargs)) / 2
             assert(pairs % 2 == 0)
             for i in range(int(pairs)):
@@ -89,18 +96,19 @@ class PRKNN_kwarg_handler():
 
     def _generate_kwargs_for_knn(self, knn_model_prefix:str, **kwargs):
 
-        assert(knn_model_prefix in ["pr_", "predict_"])
+        if not self.pr_eq_predict:
+            assert(knn_model_prefix in ["pr_", "predict_"])
 
         # for checking weights is supplied when using weighted predict_knn
-        if self._pr_version == "weighted":
-            assert("weights" in kwargs)
+        if self.pr_version == "weighted" and knn_model_prefix == "predict_":
+            assert("weights" in kwargs.keys())
 
         kwags_dict = {}
 
-        if self._pr_eq_predict:
-            prefix = ""
-        else:
-            prefix = knn_model_prefix
+        # if self.pr_eq_predict:
+        #     prefix = ""
+        # else:
+        prefix = knn_model_prefix
 
         for argument in self._knn_kwargs_list:
 
@@ -118,26 +126,16 @@ if __name__ == "__main__":
 
     from sklearn.neighbors import KNeighborsClassifier
 
-    handler= PRKNN_kwarg_handler(
-        pr_version="weighted",
-        pr_eq_predict=True,
-        n_neighbors=7,
-        n_jobs=8
-        )
-
     a = {
         "n_jobs": 6,
         "n_neighbors": 11,
-        "weights": "uniform"
+        "weights": "FOO"
         }
 
-    handler1 = PRKNN_kwarg_handler(pr_version="weighted",
-                                   pr_eq_predict=True,
-                                   **a
-    )
+    handler1 = PRKNN_kwarg_handler()
 
-    # for key, value in vars(handler1).items():
-    #     print(key, value)
+    for key, value in vars(handler1).items():
+        print(key, value)
 
     print(handler1._generate_kwargs_for_knn("pr_", weights="FOO"))
 
