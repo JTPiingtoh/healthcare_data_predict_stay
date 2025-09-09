@@ -24,7 +24,6 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
     def __init__(
         self,
         pr_version="standard", 
-        pr_eq_predict: bool = True,
         base_knn_params: dict | None = None,
         pr_knn_params: dict | None = None,
         predict_knn_params: dict | None = None
@@ -33,31 +32,13 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         # TODO: Need to seperate pr model and prediction model's kwargs somehow.
         super().__init__(
             pr_version=pr_version,
-            pr_eq_predict=pr_eq_predict,
             base_knn_params = base_knn_params,
             pr_knn_params = pr_knn_params,
             predict_knn_params =predict_knn_params
         )
 
-        # self.pr_version = pr_version
-
-        # self.pr_n_neighbors=pr_n_neighbors
-        # self.pr_algorithm=pr_algorithm
-        # self.pr_leaf_size=pr_leaf_size
-        # self.pr_weights = pr_weights
-        # self.pr_metric=pr_metric
-        # self.pr_p=pr_p
-        # self.pr_metric_params=pr_metric_params
-        # self.pr_n_jobs=pr_n_jobs
-
-        # self.predict_eq_pr=predict_eq_pr
-
-        # valid_kwargs = [
-        #     "n_neighbors", "weights", "algorithm", "leaf_size", "p",
-        #     "metric", "metric_params", "n_jobs",
-        # ]
-
-        
+        self.pr_version = pr_version
+   
 
     # These need to be set to bypass certain checks 
     def __sklearn_tags__(self):
@@ -77,6 +58,8 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
         if self.pr_version not in ["standard", "enhanced", "weighted"]:
             raise ValueError("pr_version not recognised; must be either 'standard', 'enhanced' or 'weighted'")
+        
+        self._fit_params()
 
         # Multi output not allowed
         X, y = validate_data(
@@ -102,7 +85,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         if self.pr_version == "weighted":
             prediction_model_weights = self._return_proximal_ratios
         else: 
-            prediction_model_weights = self.weights # TODO: this will break when eq=FALSE
+            prediction_model_weights = self._pr_weights # TODO: this will break when eq=FALSE
 
         self._prediction_knn_model = KNeighborsClassifier(
             **self._generate_kwargs_for_knn(
@@ -145,7 +128,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             target_class = y[id]
             radius = self._class_radii[target_class]
 
-            distances, knn_indices = self._pr_knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self.pr_n_neighbors)
+            distances, knn_indices = self._pr_knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self._pr_n_neighbors)
 
             
             knn_classes = y[knn_indices.reshape(-1,)]
@@ -182,7 +165,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         weights = self._return_proximal_ratios if version == "weighted" else "uniform"
 
 
-        distances, indexes = self._prediction_knn_model.kneighbors(X, n_neighbors=self.predict_n_neighbors)
+        distances, indexes = self._prediction_knn_model.kneighbors(X, n_neighbors=self._predict_n_neighbors)
         
         # print(distances, indexes)
 
@@ -222,7 +205,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                     # if using weighted prknn, weights at this point are just distances
                     class_distances = query_weights[query_classes == clss]
                     weight_1 = np.sum(1 / class_distances)
-                    weight_2 = np.sum([query_classes == clss] * 1) / self.predict_n_neighbors 
+                    weight_2 = np.sum([query_classes == clss] * 1) / self._predict_n_neighbors 
 
                     dist_xk = np.max(class_distances)
                     dist_x1 = np.min(class_distances)

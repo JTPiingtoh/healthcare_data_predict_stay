@@ -1,3 +1,5 @@
+import numpy as np
+
 class PRKNN_kwarg_handler():
     '''
         Handles key word arguments for the PRKNN class. THe PRKNN effecitvely wraps 2 knn models implemented by scikit-learn;
@@ -13,15 +15,23 @@ class PRKNN_kwarg_handler():
         base_knn_params: dict | None = None,
         pr_knn_params: dict | None = None,
         predict_knn_params: dict | None = None
-    ):
-
-        self.base_knn_params = base_knn_params
-        self.pr_knn_params = pr_knn_params
-        self.predict_knn_params = predict_knn_params
+    ):        
         
         if base_knn_params and (pr_knn_params or predict_knn_params):
             raise ValueError(f"pr and predict knn parameters can not be set alongside base parameters")
 
+        if (pr_knn_params and not predict_knn_params) or (not pr_knn_params and predict_knn_params):
+            raise ValueError(f"both pr and predict knn parameters must be set if base parameters not set.")
+
+
+        self.base_knn_params = base_knn_params
+        self.pr_knn_params = pr_knn_params
+        self.predict_knn_params = predict_knn_params
+        self.pr_version = pr_version
+
+    def _fit_params(self):
+
+        # used in _generate_kwargs_for_knn()
         self._knn_kwargs_list = [
             "n_neighbors",
             "weights",
@@ -45,59 +55,64 @@ class PRKNN_kwarg_handler():
             )
         
         defaults = {}
-        valid_knn_kwargs = []
-
-        for key, value in defaults_base.items():
-
-            if self.pr_eq_predict:
-
-                defaults[key] = value
-                valid_knn_kwargs.append(key)
-      
-            else:
-                
+        if self.base_knn_params:
+            defaults = defaults_base
+        else:
+            for key, value in defaults_base.items():
                 defaults["pr_" + key] = value
                 defaults["predict_" + key] = value
+        
+        pr_valid_kwargs = []
+        predict_valid_kwargs = []
+        valid_kwargs = []
+        if self.base_knn_params:
+            valid_kwargs = [argument for argument in defaults_base]
+        else:
+            pr_valid_kwargs = ["pr_" + argument for argument in defaults_base]
+            predict_valid_kwargs = ["predict_" + argument for argument in defaults_base]
+            valid_kwargs = predict_valid_kwargs + pr_valid_kwargs
 
-                valid_knn_kwargs.append("pr_" + key)
-                valid_knn_kwargs.append("predict_" + key)
+        merged = defaults
+        if self.base_knn_params:
+            merged = {**merged, **self.base_knn_params}
+
+        if self.pr_knn_params:
+            for argument in self.pr_knn_params:
+                if argument in pr_valid_kwargs:
+                    continue
+                raise ValueError(f"{argument} passed to pr_knn_params: Expected {pr_valid_kwargs}")
+
+            merged = {**merged, **self.pr_knn_params}
+
+        if self.predict_knn_params:
+            for argument in self.predict_knn_params:
+                if argument in predict_valid_kwargs:
+                    continue
+                raise ValueError(f"{argument} passed to predict_knn_params: Expected {predict_valid_kwargs}")
+
+
+            merged = {**merged, **self.predict_knn_params}
+
+        
+        for key, value in merged.items():
+            if key not in valid_kwargs:
+                raise ValueError(f"Got unexpected argument {key}, expected {valid_kwargs}")
+            elif self.base_knn_params:
+                setattr(self,"_pr_" + key,value)
+                setattr(self,"_predict_" + key,value)
+            else:
+                setattr(self,"_" + key,value)
 
             
-        merged = {**defaults,**kwargs}
 
-
-        for k in kwargs:
-
-            if k not in defaults:
-                
-                if self.pr_eq_predict and (k.startswith("pr_" or k.startswith("predict_"))): 
-                    raise ValueError(f"Recieved argument '{k}': pr_ or predict_ prefix cannot be used for arguments when pr_eq_predict=True")
-
-                elif k in defaults_base:
-                    raise ValueError(f"Recieved argument '{k}': pr_ or predict_ prefix must be used for arguments when pr_eq_predict=False")
-
-                else:
-                    raise ValueError(f"Recieved unexptected argument: {k}")
-        
-        
-        if self.pr_eq_predict:
-                for key, val in merged.items():
-                    setattr(self, "pr_" + key, val)
-                    setattr(self, "predict_" + key, val)
-        
-        else:
-            pairs = float(len(valid_knn_kwargs)) / 2
-            assert(pairs % 2 == 0)
-            for i in range(int(pairs)):
-                i*=2
-                setattr(self, valid_knn_kwargs[i], merged[valid_knn_kwargs[i]])
-                setattr(self, valid_knn_kwargs[i+1], merged[valid_knn_kwargs[i+1]])
+        self._params_fitted = True
 
 
     def _generate_kwargs_for_knn(self, knn_model_prefix:str, **kwargs):
 
-        if not self.pr_eq_predict:
-            assert(knn_model_prefix in ["pr_", "predict_"])
+        assert self._params_fitted
+
+        assert(knn_model_prefix in ["pr_", "predict_"])
 
         # for checking weights is supplied when using weighted predict_knn
         if self.pr_version == "weighted" and knn_model_prefix == "predict_":
@@ -108,7 +123,7 @@ class PRKNN_kwarg_handler():
         # if self.pr_eq_predict:
         #     prefix = ""
         # else:
-        prefix = knn_model_prefix
+        prefix = "_" + knn_model_prefix
 
         for argument in self._knn_kwargs_list:
 
@@ -126,13 +141,18 @@ if __name__ == "__main__":
 
     from sklearn.neighbors import KNeighborsClassifier
 
-    a = {
-        "n_jobs": 6,
-        "n_neighbors": 11,
-        "weights": "FOO"
+    pr_params = {
+        "pr_n_jobs": 6,
+        "pr_n_neighbors": 11,
+        "pr_weights": "FOO"
         }
+    
+    predict_params = {
+        "predict_n_jobs": 8
+    }
 
-    handler1 = PRKNN_kwarg_handler()
+    handler1 = PRKNN_kwarg_handler(pr_knn_params=pr_params, predict_knn_params=predict_params)
+    handler1._fit_params()
 
     for key, value in vars(handler1).items():
         print(key, value)
