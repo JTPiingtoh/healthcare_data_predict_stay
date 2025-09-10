@@ -50,6 +50,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         tags.classifier_tags.poor_score=False
         return tags
     
+    
     # fit knn model and calculate proximal ratio
     def fit(self, X, y):
         '''

@@ -141,6 +141,11 @@ if __name__ == "__main__":
 
     from sklearn.neighbors import KNeighborsClassifier
 
+    base_params = {
+        "n_neighbors": 9,
+        "n_jobs": 2
+    }
+    
     pr_params = {
         "pr_n_jobs": 6,
         "pr_n_neighbors": 11,
@@ -151,7 +156,7 @@ if __name__ == "__main__":
         "predict_n_jobs": 8
     }
 
-    handler1 = PRKNN_kwarg_handler(pr_knn_params=pr_params, predict_knn_params=predict_params)
+    handler1 = PRKNN_kwarg_handler(base_knn_params=base_params, pr_knn_params=pr_params, predict_knn_params=predict_params)
     handler1._fit_params()
 
     for key, value in vars(handler1).items():
