@@ -1,23 +1,32 @@
 import numpy as np
 from sklearn.utils.extmath import weighted_mode
+import numba
 
-_y = np.array([1,0,1,0,1,1,1,0,0,0,1,1,1,0,0,0,1,1,1,1,0,0,1,0,1,0,1,0,1,0]).reshape((-1, 1))
-classes = [0,1,2]
-cls =  np.array([0,0,1,2,1,2]).reshape(1,-1)
-dist = np.array([1,0,0,0,5,0], dtype=np.float64).reshape(1,-1)
+print(np.__version__)
 
-with np.errstate(divide='ignore'):
-    dist = 1 / dist
+arr = np.array([
+    [1,2],
+    [3,4],
+    [3,4],
+    [3,4],
+    [3,4],
+    [3,4],
+    [3,4],
+    [5,6]
+], dtype='float64')
 
-inf_mask = np.isinf(dist)
-inf_row = np.any(inf_mask, axis=1)
+@numba.jit()
+def pair_distances_mean(arr: np.array):
 
-# infs are now set to 1, all else are set to 0.
-dist[inf_row] = inf_mask[inf_row]
+    mean = 0
+    n = 0
 
-weights = dist
+    for i in range(arr.shape[0]):
+        for j in range(i+1, arr.shape[0]):
+            distance = np.linalg.norm(arr[i] - arr[j])
+            mean = (mean * n + distance) / (n + 1)
+            n+=1
+    
+    return mean
 
-if weights is not None:
-	mode, _ = weighted_mode(cls, weights, axis=1)
-
-print(mode)
+print(pair_distances_mean(arr))

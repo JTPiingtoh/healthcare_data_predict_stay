@@ -2,6 +2,7 @@
 
 
 import numpy as np
+import numba
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.neighbors._base import NeighborsBase
 from sklearn.utils.validation import validate_data, check_is_fitted, check_array, _num_samples, check_X_y
@@ -12,7 +13,7 @@ from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import pdist
 
 from PRKNN_handler import PRKNN_kwarg_handler
-
+from prknn_helpers import get_class_radii
 
 class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler):
     '''
@@ -57,6 +58,9 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         Computes the training set's proximal ratios, and fits the prediction model ready for prediciton.
         '''
 
+        X = np.array(X, dtype ='float64')
+        y = np.array(y, dtype ='float64')
+
         if self.pr_version not in ["standard", "enhanced", "weighted"]:
             raise ValueError("pr_version not recognised; must be either 'standard', 'enhanced' or 'weighted'")
         
@@ -79,7 +83,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         # fit pr_knn
         self._pr_knn_model = KNeighborsClassifier(**self._generate_kwargs_for_knn("pr_")).fit(X,y)        
 
-        self._class_radii = self._get_class_radii()
+        self._class_radii = get_class_radii(X, y, unique_labels(y))
         self._proximal_ratios = self._get_proximal_ratios()
 
         # build prediction model
@@ -99,25 +103,37 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
         return self
 
-
-    def _get_class_radii(self):
+    @numba.jit()
+    def _get_class_radii(X: np.array, y: np.array, target_classes: np.array):
         '''
         Get the class radii, stored in a dict.
         '''   
-
-        X, y = self.X_, self.y_
-        target_classes = self.classes_
         class_radii = {}
 
         for target_class in target_classes:
 
             class_rows = X[y == target_class]
-            pairwise_distances = pdist(class_rows, metric='euclidean')
-            class_radii[target_class] = np.mean(pairwise_distances)
+
+            mean = 0
+            n = 0
+
+            for i in range(class_rows.shape[0]):
+                for j in range(i+1, class_rows.shape[0]):
+                    pair_distance = np.linalg.norm(class_rows[i], class_rows[i])
+                    mean = (mean * n + pair_distance) / (n + 1)
+                    n+=1
+    
+            class_radii[target_class] = mean
+
+        # for target_class in target_classes:
+
+        #     class_rows = X[y == target_class]
+        #     pairwise_distances = pdist(class_rows, metric='euclidean')
+        #     class_radii[target_class] = np.mean(pairwise_distances)
 
         return class_radii
     
-
+    # TODO: optimize
     def _get_proximal_ratios(self):
         
         X, y = self.X_, self.y_
@@ -151,7 +167,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             else:
                 proximal_ratios[id] = val / c
 
-        return np.array(proximal_ratios)
+        return proximal_ratios
 
 
     def _return_proximal_ratios(self, X): 
