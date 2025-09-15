@@ -13,7 +13,7 @@ from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import pdist
 
 from PRKNN_handler import PRKNN_kwarg_handler
-from prknn_helpers import get_class_radii
+from prknn_helpers import get_class_radii_euclidean
 
 class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler):
     '''
@@ -76,21 +76,24 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                 )
         
         check_classification_targets(y) 
-        self.classes_ = unique_labels(y)
+        self._classes = unique_labels(y)
         self.X_ = X
         self.y_ = y
         
         # fit pr_knn
+        print("Fitting pr_knn")
         self._pr_knn_model = KNeighborsClassifier(**self._generate_kwargs_for_knn("pr_")).fit(X,y)        
 
-        self._class_radii = get_class_radii(X, y, unique_labels(y))
+        print("Getting class radii")
+        self._class_radii = self._get_class_radii(X, y, unique_labels(y))
         self._proximal_ratios = self._get_proximal_ratios()
 
+        print("Fitting prediction model")
         # build prediction model
         if self.pr_version == "weighted":
-            prediction_model_weights = self._return_proximal_ratios
+            prediction_model_weights = self._return_proximal_ratios()
         else: 
-            prediction_model_weights = self._pr_weights # TODO: this will break when eq=FALSE
+            prediction_model_weights = self._pr_weights 
 
         self._prediction_knn_model = KNeighborsClassifier(
             **self._generate_kwargs_for_knn(
@@ -103,27 +106,18 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
         return self
 
-    @numba.jit()
-    def _get_class_radii(X: np.array, y: np.array, target_classes: np.array):
+
+    def _get_class_radii(self, X: np.array, y: np.array, target_classes: np.array):
         '''
         Get the class radii, stored in a dict.
         '''   
         class_radii = {}
+        class_radii_values = get_class_radii_euclidean(X, y, target_classes)
 
-        for target_class in target_classes:
+        for i, radii_value in enumerate(class_radii_values):
+            class_radii[target_classes[i]] = radii_value  
 
-            class_rows = X[y == target_class]
-
-            mean = 0
-            n = 0
-
-            for i in range(class_rows.shape[0]):
-                for j in range(i+1, class_rows.shape[0]):
-                    pair_distance = np.linalg.norm(class_rows[i], class_rows[i])
-                    mean = (mean * n + pair_distance) / (n + 1)
-                    n+=1
-    
-            class_radii[target_class] = mean
+        # TODO: try chunking array instead
 
         # for target_class in target_classes:
 
@@ -142,11 +136,11 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
         for id, x in enumerate(X):
             # _class_radii is a dict
+            # TODO: change _class_radii to array
             target_class = y[id]
             radius = self._class_radii[target_class]
 
             distances, knn_indices = self._pr_knn_model.kneighbors(x.reshape(1, -1), n_neighbors=self._pr_n_neighbors)
-
             
             knn_classes = y[knn_indices.reshape(-1,)]
 
@@ -198,7 +192,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                 ww = distances
 
         # print(ww)
-        y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
+        y_pred = np.empty((X.shape[0],), dtype=self._classes[0].dtype)
 
         # TODO: implement in cpp
         # assign label of class with max weight
@@ -208,7 +202,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             query_classes = self.y_[indexes[query_index]]
 
             # the unique classes 
-            fitted_classes = self.classes_
+            fitted_classes = self._classes
 
             class_weights = np.zeros(fitted_classes.shape, dtype="float64")
 

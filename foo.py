@@ -1,32 +1,29 @@
 import numpy as np
 from sklearn.utils.extmath import weighted_mode
+from sklearn.metrics import pairwise_distances_chunked
 import numba
+from scipy.spatial.distance import pdist
+from math import comb
 
-print(np.__version__)
+rows = 10
+columns = 2
 
-arr = np.array([
-    [1,2],
-    [3,4],
-    [3,4],
-    [3,4],
-    [3,4],
-    [3,4],
-    [3,4],
-    [5,6]
-], dtype='float64')
+# TODO: if not columns not divisable by chunks, handle remainder
+chunks = 5
 
-@numba.jit()
-def pair_distances_mean(arr: np.array):
+arr = np.random.randn(rows,columns)
 
-    mean = 0
-    n = 0
 
-    for i in range(arr.shape[0]):
-        for j in range(i+1, arr.shape[0]):
-            distance = np.linalg.norm(arr[i] - arr[j])
-            mean = (mean * n + distance) / (n + 1)
-            n+=1
-    
-    return mean
+chunked_means = np.empty((chunks,))
+print(chunked_means)
 
-print(pair_distances_mean(arr))
+arr2 = arr.reshape(chunks,-1,columns)
+
+for i in range(chunks):
+    pairwise_distances = pdist(arr2[i], metric='euclidean')
+    chunked_means[i] = np.mean(pairwise_distances)
+
+print(chunked_means)
+
+print(np.mean(chunked_means))
+print(np.mean(pdist(arr, 'euclidean')))
