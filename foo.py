@@ -4,26 +4,38 @@ from sklearn.metrics import pairwise_distances_chunked
 import numba
 from scipy.spatial.distance import pdist
 from math import comb
+import gc
+import numba as nb
 
-rows = 10
-columns = 2
+def reduce_func(D_chunk, _):
+    mask = ~np.triu(np.ones_like(D_chunk, dtype=bool))
+    mean = np.mean(D_chunk[mask])
+    return np.full(shape = (D_chunk.shape[0],), fill_value=mean)
+
+
+n_observations_X = 5000_0
+n_feilds = 2
 
 # TODO: if not columns not divisable by chunks, handle remainder
 chunks = 5
 
-arr = np.random.randn(rows,columns)
+arr = np.random.randn(n_observations_X, n_feilds)
+
+D_chunks = pairwise_distances_chunked(arr)
 
 
-chunked_means = np.empty((chunks,))
-print(chunked_means)
+def grand_mean(D_chunks):
+    
+    total_size = 0
+    total_sum = 0
+    
+    for D_chunk in D_chunks:
+        mask = ~np.triu(np.ones_like(D_chunk, dtype=bool))
+        total_size += D_chunk[mask].shape[0]
+        total_sum += np.sum(D_chunk[mask])
 
-arr2 = arr.reshape(chunks,-1,columns)
+        print(total_sum)
 
-for i in range(chunks):
-    pairwise_distances = pdist(arr2[i], metric='euclidean')
-    chunked_means[i] = np.mean(pairwise_distances)
+    return total_sum / total_size
 
-print(chunked_means)
-
-print(np.mean(chunked_means))
-print(np.mean(pdist(arr, 'euclidean')))
+print(grand_mean(D_chunks))

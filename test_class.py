@@ -13,7 +13,9 @@ from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import pdist
 
 from PRKNN_handler import PRKNN_kwarg_handler
-from prknn_helpers import get_class_radii_euclidean
+from prknn_helpers import get_mean_euclidean_chunked
+
+from tqdm import tqdm
 
 class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler):
     '''
@@ -35,7 +37,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             pr_version=pr_version,
             base_knn_params = base_knn_params,
             pr_knn_params = pr_knn_params,
-            predict_knn_params =predict_knn_params
+            predict_knn_params = predict_knn_params
         )
 
         self.pr_version = pr_version
@@ -81,17 +83,15 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         self.y_ = y
         
         # fit pr_knn
-        print("Fitting pr_knn")
         self._pr_knn_model = KNeighborsClassifier(**self._generate_kwargs_for_knn("pr_")).fit(X,y)        
 
-        print("Getting class radii")
-        self._class_radii = self._get_class_radii(X, y, unique_labels(y))
-        self._proximal_ratios = self._get_proximal_ratios()
+        self._class_radii = self._compute_class_radii()
+        self._proximal_ratios = self._compute_proximal_ratios()
 
-        print("Fitting prediction model")
         # build prediction model
         if self.pr_version == "weighted":
-            prediction_model_weights = self._return_proximal_ratios()
+            # weights must be a callable 
+            prediction_model_weights = self._return_proximal_ratios
         else: 
             prediction_model_weights = self._pr_weights 
 
@@ -107,28 +107,32 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         return self
 
 
-    def _get_class_radii(self, X: np.array, y: np.array, target_classes: np.array):
+    def _compute_class_radii(self):
         '''
         Get the class radii, stored in a dict.
         '''   
+        # class_radii = {}
+        # class_radii_values = get_class_radii_euclidean(X, y, target_classes)
+
+        # for i, radii_value in enumerate(class_radii_values):
+        #     class_radii[target_classes[i]] = radii_value  
+
+        X, y = self.X_, self.y_
+
+        target_classes = self._classes
         class_radii = {}
-        class_radii_values = get_class_radii_euclidean(X, y, target_classes)
 
-        for i, radii_value in enumerate(class_radii_values):
-            class_radii[target_classes[i]] = radii_value  
-
-        # TODO: try chunking array instead
-
-        # for target_class in target_classes:
-
-        #     class_rows = X[y == target_class]
-        #     pairwise_distances = pdist(class_rows, metric='euclidean')
-        #     class_radii[target_class] = np.mean(pairwise_distances)
+        for target_class in target_classes:
+            
+            class_rows = X[y == target_class]
+            
+            class_radii[target_class] = get_mean_euclidean_chunked(class_rows)
 
         return class_radii
     
+
     # TODO: optimize
-    def _get_proximal_ratios(self):
+    def _compute_proximal_ratios(self):
         
         X, y = self.X_, self.y_
 
@@ -164,7 +168,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         return proximal_ratios
 
 
-    def _return_proximal_ratios(self, X): 
+    def _return_proximal_ratios(self): 
         return self._proximal_ratios
 
 
@@ -224,8 +228,11 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                         # each point has weight 1
                         weight_3 = np.sum([query_classes == clss] * 1)
                     else:
+                        # TODO: this needs fixing
                         weight_3 = np.sum(
-                            ( (dist_xk - dist_x1) / (dist_xk - class_distances) ) * ( (dist_xk + dist_x1) / (dist_xk + class_distances) )
+                            ( (dist_xk - class_distances) / (dist_xk - dist_x1) ) 
+                            * 
+                            ( (dist_xk + class_distances) / (dist_xk + dist_x1) )
                         )
 
                     class_weights[j] = weight_1 + weight_2 + weight_3
