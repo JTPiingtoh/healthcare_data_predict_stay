@@ -3,7 +3,6 @@ from sklearn.utils.extmath import weighted_mode
 from sklearn.metrics import pairwise_distances_chunked
 import numba
 from scipy.spatial.distance import pdist
-from math import comb
 import gc
 import numba as nb
 
