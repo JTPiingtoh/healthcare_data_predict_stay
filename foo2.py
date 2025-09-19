@@ -6,6 +6,8 @@ from scipy.spatial.distance import pdist
 import gc
 import numba as nb
 
+from prknn_helpers import get_class_radii_euclidean_non_vectorized
+
 def reduce_func(D_chunk, _):
     mask = ~np.triu(np.ones_like(D_chunk, dtype=bool))
     mean = np.mean(D_chunk[mask])
@@ -15,16 +17,12 @@ def reduce_func(D_chunk, _):
 n_observations_X = 50000
 n_feilds = 2
 
+
+np.random.seed(33)
 arr = np.random.randn(n_observations_X, n_feilds)
 
-# print(np.mean(pdist(arr)))
+mean_d = get_class_radii_euclidean_non_vectorized(arr)
 
-D_chunks = pairwise_distances_chunked(arr)
-
-prev = 0
-for D_chunk in D_chunks:
-    print(D_chunk.shape)
-    for row in D_chunk:
-        # print(np.argmin(row))
-        pass
+mean_d = np.array([mean_d])
+np.savetxt("mean_d", mean_d)
     
