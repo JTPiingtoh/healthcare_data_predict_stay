@@ -78,7 +78,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                 )
         
         check_classification_targets(y) 
-        self._classes = unique_labels(y)
+        self.classes_ = unique_labels(y)
         self.X_ = X
         self.y_ = y
         
@@ -119,7 +119,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
         X, y = self.X_, self.y_
 
-        target_classes = self._classes
+        target_classes = self.classes_
         class_radii = {}
 
         for target_class in target_classes:
@@ -196,7 +196,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                 ww = distances
 
         # print(ww)
-        y_pred = np.empty((X.shape[0],), dtype=self._classes[0].dtype)
+        y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
 
         # TODO: implement in cpp
         # assign label of class with max weight
@@ -206,7 +206,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             query_classes = self.y_[indexes[query_index]]
 
             # the unique classes 
-            fitted_classes = self._classes
+            fitted_classes = self.classes_
 
             class_weights = np.zeros(fitted_classes.shape, dtype="float64")
 
