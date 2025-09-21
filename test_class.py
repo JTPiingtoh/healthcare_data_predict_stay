@@ -177,7 +177,6 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         check_is_fitted(self)
         version = self.pr_version
         X = validate_data(self, X, reset=False)
-        weights = self._return_proximal_ratios if version == "weighted" else "uniform"
 
 
         distances, indexes = self._prediction_knn_model.kneighbors(X, n_neighbors=self._predict_n_neighbors)
@@ -216,7 +215,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                 if not np.any([query_classes == clss]):
                     class_weights[j] = 0
                 # TODO: implement weighted prKNN quary weights here
-                elif self.pr_version == "weighted":
+                elif version == "weighted":
                     # if using weighted prknn, weights at this point are just distances
                     class_distances = query_weights[query_classes == clss]
                     weight_1 = np.sum(1 / class_distances)

@@ -32,25 +32,53 @@ def get_class_radii_euclidean_non_vectorized(X: np.array, y: np.array, target_cl
     return class_radii
 
 
-def get_mean_euclidean_chunked(X: np.array):
-    '''
-    Calculated the mean pairwise distances using chunking
-    '''
+# def get_mean_euclidean_chunked(X: np.array):
+#     '''
+#     Calculated the mean pairwise distances using chunking
+#     '''
 
-    D_chunks = pairwise_distances_chunked(X)
+#     D_chunks = pairwise_distances_chunked(X)
 
-    total_size = 0
-    total_sum = 0
+#     total_size = 0
+#     total_sum = 0
     
-    for D_chunk in D_chunks:
-        mask = ~np.triu(np.ones_like(D_chunk, dtype=bool))
-        total_size += D_chunk[mask].shape[0]
-        total_sum += np.sum(D_chunk[mask])
+#     for D_chunk in D_chunks:
+#         mask = ~np.triu(np.ones_like(D_chunk, dtype=bool))
+#         total_size += D_chunk[mask].shape[0]
+#         total_sum += np.sum(D_chunk[mask])
 
+
+#     return total_sum / total_size
+
+
+def get_mean_euclidean_chunked(X: np.ndarray) -> float:
+    """
+    Compute the mean pairwise Euclidean distance using chunking.
+    """
+    total_sum = 0.0
+    total_size = 0
+
+    def reduce_func(D_chunk, start):
+        nonlocal total_sum, total_size
+        n_samples = D_chunk.shape[1]
+
+        
+        row_indices = np.arange(start, start + D_chunk.shape[0])
+
+        for local_row, global_row in enumerate(row_indices):
+            
+            valid_cols = np.arange(global_row + 1, n_samples)
+            dists = D_chunk[local_row, valid_cols]
+
+            total_sum += dists.sum()
+            total_size += dists.size
+
+        return None  
+
+    
+    list(pairwise_distances_chunked(X, reduce_func=reduce_func))
 
     return total_sum / total_size
-
-
 
 
 if __name__ == "__main__":

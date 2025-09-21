@@ -15,9 +15,6 @@ def reduce_func(D_chunk, _):
 n_observations_X = 5000_0
 n_feilds = 2
 
-# TODO: if not columns not divisable by chunks, handle remainder
-chunks = 5
-
 arr = np.random.randn(n_observations_X, n_feilds)
 
 D_chunks = pairwise_distances_chunked(arr)
