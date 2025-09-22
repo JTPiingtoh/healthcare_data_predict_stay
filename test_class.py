@@ -209,6 +209,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
             class_weights = np.zeros(fitted_classes.shape, dtype="float64")
 
+            # TODO: compile
             for j, clss in enumerate(fitted_classes): 
 
                 # A if class is not present, set weight to 0.

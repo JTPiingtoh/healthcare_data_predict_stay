@@ -2,4 +2,27 @@ https://www.kaggle.com/datasets/nehaprabhavalkar/av-healthcare-analytics-ii/disc
 
 Data has high cardinality in catagorical columns, therefore correlating and aggregating columns will help to reduce size of matrix one one-hot encoding is used.
 
-Some test notes
+Datasets:
+
+Banknote
+Glass
+Ionosphere
+wine
+Parkinson
+Sonar
+PLRX - planning rexlax: needs to be downloaded
+Haberman
+Page Blocks
+Letter
+Recognition
+Ecoli
+Optical digits
+Vowel
+Robot-navigation
+Pen_digits
+Seeds
+Transfusion
+Hill_Valley
+Musk2
+WPbc
+Wdbc
