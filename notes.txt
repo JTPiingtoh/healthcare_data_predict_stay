@@ -10,7 +10,7 @@ Ionosphere
 wine
 Parkinson
 Sonar
-PLRX - planning rexlax: needs to be downloaded
+PLRX - AKA planning relax: needs to be downloaded
 Haberman
 Page Blocks
 Letter
@@ -22,7 +22,7 @@ Robot-navigation
 Pen_digits
 Seeds
 Transfusion
-Hill_Valley
+Hill_Valley - needs to be downloaded
 Musk2
 WPbc
 Wdbc
