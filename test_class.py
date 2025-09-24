@@ -13,7 +13,7 @@ from scipy.spatial.distance import euclidean
 from scipy.spatial.distance import pdist
 
 from PRKNN_handler import PRKNN_kwarg_handler
-from prknn_helpers import get_mean_euclidean_chunked
+from prknn_helpers import get_mean_euclidean_chunked, _predict_on_weights
 
 from tqdm import tqdm
 
@@ -100,6 +100,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                 knn_model_prefix="predict_", 
                 weights=prediction_model_weights)
                 ).fit(X,y)
+        
 
         self.is_fitted_ = True
 
@@ -179,7 +180,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
         X = validate_data(self, X, reset=False)
 
 
-        distances, indexes = self._prediction_knn_model.kneighbors(X, n_neighbors=self._predict_n_neighbors)
+        dd, indexes = self._prediction_knn_model.kneighbors(X, n_neighbors=self._predict_n_neighbors)
         
         # print(distances, indexes)
 
@@ -188,14 +189,26 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             divide="ignore"
         ):
             if version == "standard":
-                ww = self._proximal_ratios[indexes] / distances
+                ww = self._proximal_ratios[indexes] / dd
             elif version == "enhanced":
                 ww = self._proximal_ratios[indexes] 
             elif version == "weighted":
-                ww = distances
+                ww = dd
 
         # print(ww)
         y_pred = np.empty((X.shape[0],), dtype=self.classes_[0].dtype)
+
+        fitted_classes = self.classes_
+        n_neighbors = self._predict_n_neighbors
+        y_pred = _predict_on_weights(
+            ww=ww,
+            y=self.y_,
+            indexes=indexes,
+            fitted_classes=fitted_classes,
+            n_neighbors=n_neighbors,
+            version=version,
+            y_pred=y_pred
+        )
 
         # TODO: implement in cpp
         # assign label of class with max weight
@@ -205,7 +218,6 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             query_classes = self.y_[indexes[query_index]]
 
             # the unique classes 
-            fitted_classes = self.classes_
 
             class_weights = np.zeros(fitted_classes.shape, dtype="float64")
 
@@ -213,22 +225,29 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
             for j, clss in enumerate(fitted_classes): 
 
                 # A if class is not present, set weight to 0.
-                if not np.any([query_classes == clss]):
+                class_mask = query_classes == clss
+                if not np.any(class_mask):
                     class_weights[j] = 0
-                # TODO: implement weighted prKNN quary weights here
+                
                 elif version == "weighted":
                     # if using weighted prknn, weights at this point are just distances
-                    class_distances = query_weights[query_classes == clss]
+                    class_distances = query_weights[class_mask]
+
+                    zero_mask = class_distances == 0
+                    if np.any(zero_mask):
+                        class_weights[j] = np.inf
+                        continue
+
                     weight_1 = np.sum(1 / class_distances)
-                    weight_2 = np.sum([query_classes == clss] * 1) / self._predict_n_neighbors 
+                    weight_2 = np.sum(class_mask) / self._predict_n_neighbors 
 
                     dist_xk = np.max(class_distances)
                     dist_x1 = np.min(class_distances)
                     if dist_xk == dist_x1:
                         # each point has weight 1
-                        weight_3 = np.sum([query_classes == clss] * 1)
+                        weight_3 = np.sum(class_mask)
                     else:
-                        # TODO: this needs fixing
+                        
                         weight_3 = np.sum(
                             ( (dist_xk - class_distances) / (dist_xk - dist_x1) ) 
                             * 
@@ -238,7 +257,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                     class_weights[j] = weight_1 + weight_2 + weight_3
                     
                 else:
-                    class_weights[j] = np.mean(query_weights[query_classes == clss])
+                    class_weights[j] = np.mean(query_weights[class_mask])
             
             # print(class_weights, classes, fitted_classes[np.argmax(class_weights)]) 
             
