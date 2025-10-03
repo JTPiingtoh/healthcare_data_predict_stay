@@ -1,3 +1,10 @@
+# Local files and folders
+foo.py
+foo2.py
+fooo.ipynb
+bad_practice
+notes.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

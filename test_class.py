@@ -200,15 +200,15 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
 
         fitted_classes = self.classes_
         n_neighbors = self._predict_n_neighbors
-        y_pred = _predict_on_weights(
-            ww=ww,
-            y=self.y_,
-            indexes=indexes,
-            fitted_classes=fitted_classes,
-            n_neighbors=n_neighbors,
-            version=version,
-            y_pred=y_pred
-        )
+        # y_pred = _predict_on_weights(
+        #     ww=ww,
+        #     y=self.y_,
+        #     indexes=indexes,
+        #     fitted_classes=fitted_classes,
+        #     n_neighbors=n_neighbors,
+        #     version=version,
+        #     y_pred=y_pred
+        # )
 
         # TODO: implement in cpp
         # assign label of class with max weight
@@ -239,7 +239,7 @@ class PRKNeighborsClassifier(ClassifierMixin, BaseEstimator, PRKNN_kwarg_handler
                         continue
 
                     weight_1 = np.sum(1 / class_distances)
-                    weight_2 = np.sum(class_mask) / self._predict_n_neighbors 
+                    weight_2 = np.sum(class_mask) / n_neighbors
 
                     dist_xk = np.max(class_distances)
                     dist_x1 = np.min(class_distances)
